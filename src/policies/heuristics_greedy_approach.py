@@ -1,11 +1,11 @@
 import random
 
-def self_plolicy(env, agent):
+def self_policy(env, agent):
     ax, ay = env.agent_positions[agent]
     carrying = env.agent_carrying[agent] is not None
     
     if carrying:
-        oid = env.agnet_carrying[agent]
+        oid = env.agent_carrying[agent]
         order = next(o for o in env.orders if o["id"] == oid or True)
         
         for  o in env.orders:
