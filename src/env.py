@@ -1,6 +1,7 @@
 from pettingzoo.utils.env import ParallelEnv
 import numpy as np
 import random
+from gymnasium import spaces
 
 class DeliveryFleetEnv(ParallelEnv):
     metadata = {'render.modes': ['human']}
@@ -147,3 +148,13 @@ class DeliveryFleetEnv(ParallelEnv):
             grid[y, x] = agent[-1]
         print("\n".join(" ".join(row) for row in grid))
         print()
+        
+        
+    def action_space(self, agent):
+        return spaces.Discrete(5)
+    
+    def obervation_sapce(self, agent):
+        
+        low = np.array([0, 0, -1, -1, -1, -1], dtype=np.float32)
+        high = np.array([self.grid_size - 1]*6, dtype=np.float32)
+        return spaces.Box(low=low, high=high, shape=(6,), dtype=np.float32)
