@@ -25,42 +25,56 @@ class SingleAgentWrapper(gym.Env):
         )
 
         # ----- Action space -----
-        act_space = self.base_env.action_spaces[self.control_agent]
+        act_space = getattr(self.base_env, "action_spaces", {}).get(self.control_agent,None)
         if isinstance(act_space, int):
             self.action_space = gym.spaces.Discrete(act_space)
-        else:
+        
+        elif act_space is not None:
             self.action_space = act_space
+        else:
+            try:
+                self.action_space = self.base_env.action_space(self.control_agent)
+                
+            except Exception:
+                self.action_space = gym.spaces.Discrete(5)
 
     def reset(self, *, seed=None, options=None, **kwargs):
-        # ignore seed/options if base_env does not support them
+        self._t += 1
         obs = self.base_env.reset()
         return np.array(obs[self.control_agent], dtype=np.float32), {}
 
     def step(self, action):
-        # Build full action dict
+        self._t += 1
         actions = {}
         for agent in self.base_env.agents:
             if agent == self.control_agent:
                 actions[agent] = int(action)
             else:
-                # Sample a random valid action for other agents
-                space = self.base_env.action_spaces[agent]
+                space = getattr(self.base_env, "action_spaces", {}).get(agent, None)
                 if isinstance(space, int):
                     actions[agent] = np.random.randint(0, space)
-                else:
+                    
+                elif space is not None:
                     actions[agent] = space.sample()
+                else:
+                    actions[agent] = np.random.randint(0, 5)
 
         obs, rewards, dones, infos = self.base_env.step(actions)
 
         terminated = dones.get(self.control_agent, False)
-        truncated = False  # Can implement max-step truncation if needed
+        truncated = False 
+        
+        if self.max_episode_step is not None and self._t >= self.max_episode_steps:
+            truncated = True
+            
+        info = infos.get(self.control_agent, {})
 
         return (
             np.array(obs[self.control_agent], dtype=np.float32),
-            rewards[self.control_agent],
+            float(rewards[self.control_agent]),
             terminated,
             truncated,
-            infos.get(self.control_agent, {}),
+            info,
         )
 
     def render(self):
