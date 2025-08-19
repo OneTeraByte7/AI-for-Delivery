@@ -1,6 +1,6 @@
 import gymnasium as gym
 import numpy as np
-
+#trains multiple agents
 class MultiAgentWrapper(gym.Env):
     """
     Wraps a multi-agent environment (DeliveryFleetEnv) into a single Gym environment

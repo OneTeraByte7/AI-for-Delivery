@@ -6,7 +6,7 @@ from stable_baselines3.common.monitor import Monitor
 from wrapper.single_agent import SingleAgentWrapper
 from env import DeliveryFleetEnv
 
-# Folders
+# Folders for the use
 os.makedirs("models", exist_ok=True)
 os.makedirs("logs", exist_ok=True)
 os.makedirs("checkpoints", exist_ok=True)
