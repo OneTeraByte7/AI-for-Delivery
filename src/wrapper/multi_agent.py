@@ -32,3 +32,18 @@ class MultiAgentWrapper(gym.Env):
         obs_dict = self.base_env.reset()
         obs = np.concatenate([np.array(obs_dict[agent], dtype=np.float32) for agent in self.agents])
         return obs, {}
+    
+    def step(self, action):
+        """
+        `action` is a list/array of actions for all agents in order of self.agents
+        """
+        actions = {agent: int(a) for agent, a in zip(self.agents, action)}
+        obs_dict, rewards_dict, dones_dict, infos_dict = self.base_env.step(actions)
+
+        obs = np.concatenate([np.array(obs_dict[agent], dtype=np.float32) for agent in self.agents])
+        reward = sum(rewards_dict.values())  # global reward (can also use individual)
+        terminated = all(dones_dict.values())
+        truncated = False
+        info = infos_dict
+
+        return obs, reward, terminated, truncated, info
