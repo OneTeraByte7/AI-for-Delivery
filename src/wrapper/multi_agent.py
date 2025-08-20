@@ -27,3 +27,8 @@ class MultiAgentWrapper(gym.Env):
         
         max_actions = max([self.base_env.action_spaces[agent] for agent in self.agents])
         self.action_space = gym.spaces.MultiDiscrete([max_actions for _ in self.agents])
+        
+    def reset(self, *, seed=None, options=None, **kwargs):
+        obs_dict = self.base_env.reset()
+        obs = np.concatenate([np.array(obs_dict[agent], dtype=np.float32) for agent in self.agents])
+        return obs, {}
