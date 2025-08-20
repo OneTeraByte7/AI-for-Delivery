@@ -47,3 +47,9 @@ class MultiAgentWrapper(gym.Env):
         info = infos_dict
 
         return obs, reward, terminated, truncated, info
+    
+    def render(self):
+        self.base_env.render()
+
+    def close(self):
+        self.base_env.close()
