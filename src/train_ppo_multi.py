@@ -19,4 +19,7 @@ def main():
         print(f"\n--- Curriculum Stage {stage}: {env_kwargs} ---")
         venv = DummyVecEnv([lambda: make_env(env_kwargs)])
         model = PPO("MlpPolicy", venv, verbose=1, tensorboard_log="./tensorboard_ma/")
-        model.learn(total_timesteps=total_timesteps)
+        model.learn(total_timesteps=total_timesteps_per_stage)
+        model.save(f"model/ppo_ma_stage_{stage}.zip")
+        print(F"Saved model for stage {stage}")
+        
