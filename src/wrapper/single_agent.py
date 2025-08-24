@@ -20,7 +20,7 @@ class SingleAgentWrapper(gym.Env):
 
         # ----- Observation space -----
         sample_obs = np.array(self.base_env.reset()[self.control_agent], dtype=np.float32)
-        self.observation_space = gym.spaces.Box(
+        self.observations_space = gym.spaces.Box(
             low=-np.inf * np.ones_like(sample_obs, dtype=np.float32),
             high=np.inf * np.ones_like(sample_obs, dtype=np.float32),
             dtype=np.float32,
