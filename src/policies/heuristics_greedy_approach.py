@@ -29,3 +29,5 @@ def self_policy(env, agent):
     if ty < ay: return 1
     
     return 0;
+
+#code works 
