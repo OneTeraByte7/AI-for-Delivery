@@ -3,7 +3,7 @@ from typing import Dict, List, Tuple, Optional
 import math
 import random
 
-UP, DOWN, LEFT, RIGHT = 0, 1, 2, 3, 4
+UP, DOWN, LEFT, RIGHT, STAY = 0, 1, 2, 3, 4
 
 def _sign(x: int) -> int:
     return (x > 0) - (x < 0)
