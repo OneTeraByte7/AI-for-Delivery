@@ -58,3 +58,89 @@ class CoordinatedGreedy:
             self.paths[a] = path
 
         self.path_idx: Dict[str, int] = {a: 0 for a in self.agents}
+        
+    def _in_zone(self, pos: Tuple[int, int], zone: Tuple[int, int]) -> bool:
+        _, c = pos
+        c0, c1 = zone
+        return c0 <= c <= c1
+
+    def _extract_targets(self) -> Tuple[List[Tuple[int, int]], List[Tuple[int, int]]]:
+        """
+        Try to discover pickups (P) and deliveries (D).
+        Fallback to empty lists if env doesn't expose them.
+        """
+        # Common names people use; extend if your env differs
+        pickup_candidates = [
+            getattr(self.env, "pickups", None),
+            getattr(self.env, "orders", None),
+            getattr(self.env, "pickup_locations", None),
+        ]
+        delivery_candidates = [
+            getattr(self.env, "deliveries", None),
+            getattr(self.env, "dropoffs", None),
+            getattr(self.env, "delivery_locations", None),
+        ]
+        def to_list(x):
+            if x is None:
+                return []
+            return list(x)
+
+        pickups = []
+        for cand in pickup_candidates:
+            pickups = to_list(cand)
+            if pickups: break
+
+        deliveries = []
+        for cand in delivery_candidates:
+            deliveries = to_list(cand)
+            if deliveries: break
+
+        return pickups, deliveries
+
+    def act(self, obs: Dict[str, object]) -> Dict[str, int]:
+        """
+        obs: per-agent observation dict from env.reset()/env.step()
+        returns: per-agent discrete action
+        """
+        pickups, deliveries = self._extract_targets()
+        positions = getattr(self.env, "agent_positions", {})
+        carrying = getattr(self.env, "agent_carrying", {})
+
+        actions: Dict[str, int] = {}
+
+        for a in self.agents:
+            pos = positions.get(a, None)
+            if pos is None:
+                # If env doesn't expose positions, just stay (or random)
+                actions[a] = STAY
+                continue
+
+            zone = self.zones[a]
+
+            # If carrying, head toward nearest delivery (if known)
+            if carrying.get(a, None):
+                if deliveries:
+                    target = _closest(pos, deliveries)
+                    actions[a] = _move_towards(pos, target)
+                    continue
+                # else: fall back to sweep
+
+            # If not carrying, look for a pickup in-zone
+            if pickups:
+                # prioritize targets inside my zone
+                in_zone = [p for p in pickups if self._in_zone(p, zone)]
+                target = _closest(pos, in_zone) if in_zone else _closest(pos, pickups)
+                actions[a] = _move_towards(pos, target)
+                continue
+
+            # Fallback: follow zone sweep path
+            path = self.paths[a]
+            idx = self.path_idx[a]
+            goal = path[idx]
+            if pos == goal:
+                idx = (idx + 1) % len(path)
+                self.path_idx[a] = idx
+                goal = path[idx]
+            actions[a] = _move_towards(pos, goal)
+
+        return actions
