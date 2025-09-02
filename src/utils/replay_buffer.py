@@ -32,3 +32,24 @@ class PerAgentReplayBuffer:
             d = bool(dones.get(a, False))
             u = int(actions[a])
             self.data[a].append((o, u, r, n, d))
+            
+    def size(self) -> int:
+        return sum(len(v) for v in self.data.values())
+
+    def save_npz(self, path: str):
+        # flatten to arrays per agent
+        npz_dict = {}
+        for a, buf in self.data.items():
+            if not buf:
+                continue
+            O, A, R, N, D = zip(*buf)
+            npz_dict[f"{a}/obs"] = np.stack(O, axis=0)
+            npz_dict[f"{a}/actions"] = np.asarray(A, dtype=np.int64)
+            npz_dict[f"{a}/rewards"] = np.asarray(R, dtype=np.float32)
+            npz_dict[f"{a}/next_obs"] = np.stack(N, axis=0)
+            npz_dict[f"{a}/dones"] = np.asarray(D, dtype=np.bool_)
+        np.savez_compressed(path, **npz_dict)
+
+    def clear(self):
+        for a in list(self.data.keys()):
+            self.data[a].clear()
