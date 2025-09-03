@@ -37,6 +37,6 @@ def main():
     print(f"Saved replay buffer: {path} (transitions: {rb.size()})")
     
     
-if"__name__" == "__main__":
+if __name__ == "__main__":
     main()
     
