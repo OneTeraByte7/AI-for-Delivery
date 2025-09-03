@@ -59,17 +59,28 @@ class CoordinatedGreedy:
 
         self.path_idx: Dict[str, int] = {a: 0 for a in self.agents}
         
-    def _in_zone(self, pos: Tuple[int, int], zone: Tuple[int, int]) -> bool:
-        _, c = pos
+    def _in_zone(self, pos, zone: Tuple[int, int]) -> bool:
+        if isinstance(pos, dict):
+            r, c = pos.get("pos", (None, None))[:2]
+        elif isinstance(pos, (tuple, list)):
+            r, c = pos[:2]
+        else:
+            raise ValueError(f"Unexpected pos format in _in_zone: {pos}")
+
         c0, c1 = zone
         return c0 <= c <= c1
 
+
     def _extract_targets(self) -> Tuple[List[Tuple[int, int]], List[Tuple[int, int]]]:
-        """
-        Try to discover pickups (P) and deliveries (D).
-        Fallback to empty lists if env doesn't expose them.
-        """
-        # Common names people use; extend if your env differs
+        def normalize(lst):
+            out = []
+            for x in lst or []:
+                if isinstance(x, dict) and "pos" in x:
+                    out.append(tuple(x["pos"][:2]))
+                elif isinstance(x, (tuple, list)):
+                    out.append(tuple(x[:2]))
+            return out
+
         pickup_candidates = [
             getattr(self.env, "pickups", None),
             getattr(self.env, "orders", None),
@@ -80,22 +91,19 @@ class CoordinatedGreedy:
             getattr(self.env, "dropoffs", None),
             getattr(self.env, "delivery_locations", None),
         ]
-        def to_list(x):
-            if x is None:
-                return []
-            return list(x)
 
-        pickups = []
+        pickups, deliveries = [], []
         for cand in pickup_candidates:
-            pickups = to_list(cand)
-            if pickups: break
-
-        deliveries = []
+            if cand:
+                pickups = normalize(cand)
+                if pickups: break
         for cand in delivery_candidates:
-            deliveries = to_list(cand)
-            if deliveries: break
+            if cand:
+                deliveries = normalize(cand)
+                if deliveries: break
 
         return pickups, deliveries
+
 
     def act(self, obs: Dict[str, object]) -> Dict[str, int]:
         """
