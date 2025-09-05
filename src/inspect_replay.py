@@ -24,4 +24,17 @@ def main():
     print(f"  Min: {np.min(rewards):.3f}")
     print(f"  Max: {np.max(rewards):.3f}")
     
+    unique, counts = np.unique(actions, return_counts=True)
+    print("\nAction distribution:")
+    for u, c in zip(unique, counts):
+        print(f"  Action {u}: {c} times")
+    
+    # Plot rewards
+    plt.figure()
+    plt.hist(rewards, bins=20, alpha=0.7)
+    plt.title("Reward Distribution")
+    plt.xlabel("Reward")
+    plt.ylabel("Frequency")
+    plt.show()
+    
     
