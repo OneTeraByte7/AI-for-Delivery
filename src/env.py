@@ -3,10 +3,11 @@ import numpy as np
 import random
 from gymnasium import spaces
 
+
 class DeliveryFleetEnv(ParallelEnv):
     metadata = {'render.modes': ['human']}
     
-    def __init__(self, grid_size=10, num_agents=3, max_orders=5, order_spawn_rate=5):
+    def __init__(self, grid_size=10, num_agents=3, max_orders=10, order_spawn_rate=2):
         self.grid_size = grid_size
         self._num_agents = num_agents
         self.max_orders = max_orders
@@ -20,12 +21,19 @@ class DeliveryFleetEnv(ParallelEnv):
         self.orders = []  # active orders
         self.next_order_id = 0
 
-        self.action_spaces = {agent: 5 for agent in self.agents}
-        self.observation_spaces = {agent: (6,) for agent in self.agents}  # x, y, px, py, dx, dy
+        # spaces
+        self.action_spaces = {agent: spaces.Discrete(5) for agent in self.agents}
+        self.observation_spaces = {
+            agent: spaces.Box(low=np.array([0, 0, -1, -1, -1, -1], dtype=np.float32),
+                              high=np.array([self.grid_size - 1] * 6, dtype=np.float32),
+                              shape=(6,),
+                              dtype=np.float32)
+            for agent in self.agents
+        }
         
         self.reset()
         
-    def reset(self):
+    def reset(self, seed=None, options=None):
         self.step_count = 0
         self.orders = []
         self.next_order_id = 0
@@ -74,29 +82,30 @@ class DeliveryFleetEnv(ParallelEnv):
     
     def step(self, actions):
         self.step_count += 1
-        rewards = {agent: -0.1 for agent in self.agents}  # step penalty
+        rewards = {agent: -0.01 for agent in self.agents}  # smaller step penalty
         dones = {agent: False for agent in self.agents}
         infos = {agent: {} for agent in self.agents}
         
-        # possibly spawn a new order
+        # spawn new order
         if self.step_count % self.order_spawn_rate == 0:
             self._spawn_order()
         
-        # Move agents
+        # move agents (action mapping fixed to match CoordinatedGreedy)
         new_positions = {}
         for agent, action in actions.items():
             x, y = self.agent_positions[agent]
-            if action == 1 and y > 0:
+            if action == 0 and y > 0:  # UP
                 y -= 1
-            elif action == 2 and y < self.grid_size - 1:
+            elif action == 1 and y < self.grid_size - 1:  # DOWN
                 y += 1
-            elif action == 3 and x > 0:
+            elif action == 2 and x > 0:  # LEFT
                 x -= 1
-            elif action == 4 and x < self.grid_size - 1:
+            elif action == 3 and x < self.grid_size - 1:  # RIGHT
                 x += 1
+            # action == 4 -> stay
             new_positions[agent] = (x, y)
         
-        # Collision resolution
+        # collision resolution
         pos_counts = {}
         for pos in new_positions.values():
             pos_counts[pos] = pos_counts.get(pos, 0) + 1
@@ -107,27 +116,27 @@ class DeliveryFleetEnv(ParallelEnv):
         
         self.agent_positions = new_positions
         
-        # Pickup & Dropoff handling
+        # pickup & dropoff
         for agent in self.agents:
             pos = self.agent_positions[agent]
             if self.agent_carrying[agent] is None:
-                # try pickup
+                # pickup
                 for order in self.orders:
                     if order["status"] == "waiting" and pos == order["pickup"]:
                         order["status"] = "picked"
                         self.agent_carrying[agent] = order["id"]
-                        rewards[agent] += 1  # pickup bonus
+                        rewards[agent] += 5  # pickup bonus
                         break
             else:
-                # try dropoff
+                # dropoff
                 for order in self.orders:
                     if order["id"] == self.agent_carrying[agent] and pos == order["dropoff"]:
                         order["status"] = "delivered"
-                        rewards[agent] += 10  # delivery bonus
+                        rewards[agent] += 20  # delivery bonus
                         self.agent_carrying[agent] = None
                         break
         
-        # Remove delivered orders
+        # remove delivered orders
         self.orders = [o for o in self.orders if o["status"] != "delivered"]
         
         observations = self._get_obs()
@@ -148,13 +157,3 @@ class DeliveryFleetEnv(ParallelEnv):
             grid[y, x] = agent[-1]
         print("\n".join(" ".join(row) for row in grid))
         print()
-        
-        
-    def action_space(self, agent):
-        return spaces.Discrete(5)
-    
-    def obervation_sapce(self, agent):
-        
-        low = np.array([0, 0, -1, -1, -1, -1], dtype=np.float32)
-        high = np.array([self.grid_size - 1]*6, dtype=np.float32)
-        return spaces.Box(low=low, high=high, shape=(6,), dtype=np.float32)

@@ -1,20 +1,26 @@
+# src/policies/coordinated_greedy.py
 from __future__ import annotations
 from typing import Dict, List, Tuple, Optional
-import math
 import random
 
 UP, DOWN, LEFT, RIGHT, STAY = 0, 1, 2, 3, 4
 
-def _sign(x: int) -> int:
-    return (x > 0) - (x < 0)
-
-def _move_towards(src: Tuple[int, int], dist: Tuple[int, int]) -> int:
-    (r0, c0), (r1, c1) = src, dist
+def _move_towards(src: Tuple[int, int], dst: Tuple[int, int]) -> int:
+    (r0, c0), (r1, c1) = src, dst
     dr, dc = r1 - r0, c1 - c0
+    # prefer largest axis first (Manhattan)
     if abs(dr) >= abs(dc):
-        return DOWN if dr > 0 else (UP if dr < 0 else (RIGHT if dc > 0 else (LEFT if dc < 0 else STAY)))
+        if dr > 0: return DOWN
+        if dr < 0: return UP
+        if dc > 0: return RIGHT
+        if dc < 0: return LEFT
+        return STAY
     else:
-        return RIGHT if dc > 0 else (LEFT if dc < 0 else (DOWN if dr > 0 else (UP if dr < 0 else STAY)))
+        if dc > 0: return RIGHT
+        if dc < 0: return LEFT
+        if dr > 0: return DOWN
+        if dr < 0: return UP
+        return STAY
 
 def _closest(src: Tuple[int, int], targets: List[Tuple[int, int]]) -> Optional[Tuple[int, int]]:
     if not targets:
@@ -23,30 +29,26 @@ def _closest(src: Tuple[int, int], targets: List[Tuple[int, int]]) -> Optional[T
 
 class CoordinatedGreedy:
     """
-    Coordination layer:
-      - Partition grid into vertical zones; each agent patrols its zone (lawnmower).
-      - If we can detect pickups/deliveries, chase nearest relevant target within zone.
-      - If agent is carrying (via env.agent_carrying if present), bias toward delivery.
-    Works without env internals (degrades to zone sweep).
+    Robust coordinated greedy policy:
+    - Extracts pickups & dropoffs from env.orders when available
+    - Zones & sweep fallback
+    - If agent at pickup => STAY to ensure pickup processed
     """
-
     def __init__(self, env, seed: int = 0):
         random.seed(seed)
         self.env = env
         self.grid_size = getattr(env, "grid_size", 8)
-        # Agents order must be stable
         self.agents: List[str] = list(env.agents)
         self.num_agents = len(self.agents)
 
-        # Build zones: split columns among agents
-        cols_per = max(1, self.grid_size // self.num_agents)
+        cols_per = max(1, self.grid_size // max(1, self.num_agents))
         self.zones: Dict[str, Tuple[int, int]] = {}
         for i, a in enumerate(self.agents):
             c0 = i * cols_per
             c1 = self.grid_size - 1 if i == self.num_agents - 1 else min(self.grid_size - 1, c0 + cols_per - 1)
             self.zones[a] = (c0, c1)
 
-        # Precompute sweep paths per agent (row-wise boustrophedon inside zone)
+        # sweep paths
         self.paths: Dict[str, List[Tuple[int, int]]] = {}
         for a, (c0, c1) in self.zones.items():
             path = []
@@ -56,92 +58,113 @@ class CoordinatedGreedy:
                 for c in cols:
                     path.append((r, c))
             self.paths[a] = path
-
         self.path_idx: Dict[str, int] = {a: 0 for a in self.agents}
-        
-    def _in_zone(self, pos, zone: Tuple[int, int]) -> bool:
-        if isinstance(pos, dict):
-            r, c = pos.get("pos", (None, None))[:2]
-        elif isinstance(pos, (tuple, list)):
-            r, c = pos[:2]
-        else:
-            raise ValueError(f"Unexpected pos format in _in_zone: {pos}")
 
-        c0, c1 = zone
-        return c0 <= c <= c1
+    def _normalize_pos(self, item) -> Optional[Tuple[int, int]]:
+        # Accept (r,c), [r,c], dict with 'pos', or order dicts
+        if item is None:
+            return None
+        if isinstance(item, (tuple, list)):
+            return (int(item[0]), int(item[1]))
+        if isinstance(item, dict):
+            if "pos" in item:
+                p = item["pos"]
+                return (int(p[0]), int(p[1]))
+            # order dicts might have 'pickup'/'dropoff'
+            if "pickup" in item and "dropoff" in item:
+                # caller will decide which to use
+                return None
+        return None
 
+    def _extract_targets(self):
+        """
+        Returns two lists of (r,c): pickups, dropoffs
+        Tries multiple env attributes, and also inspects env.orders list if present.
+        """
+        pickups: List[Tuple[int, int]] = []
+        dropoffs: List[Tuple[int, int]] = []
 
-    def _extract_targets(self) -> Tuple[List[Tuple[int, int]], List[Tuple[int, int]]]:
-        def normalize(lst):
-            out = []
-            for x in lst or []:
-                if isinstance(x, dict) and "pos" in x:
-                    out.append(tuple(x["pos"][:2]))
-                elif isinstance(x, (tuple, list)):
-                    out.append(tuple(x[:2]))
-            return out
+        # 1) If env has orders list of dicts with 'pickup'/'dropoff'
+        orders = getattr(self.env, "orders", None)
+        if orders:
+            try:
+                for o in orders:
+                    if isinstance(o, dict):
+                        p = o.get("pickup", None)
+                        d = o.get("dropoff", None) or o.get("dropoff", o.get("drop", None))
+                        if p:
+                            pickups.append((int(p[0]), int(p[1])))
+                        if d:
+                            dropoffs.append((int(d[0]), int(d[1])))
+                    elif isinstance(o, (tuple, list)) and len(o) >= 2:
+                        pickups.append((int(o[0][0]), int(o[0][1])))
+                        dropoffs.append((int(o[1][0]), int(o[1][1])))
+            except Exception:
+                # fall through to other candidates if structure unexpected
+                pickups = []
+                dropoffs = []
 
-        pickup_candidates = [
-            getattr(self.env, "pickups", None),
-            getattr(self.env, "orders", None),
-            getattr(self.env, "pickup_locations", None),
-        ]
-        delivery_candidates = [
-            getattr(self.env, "deliveries", None),
-            getattr(self.env, "dropoffs", None),
-            getattr(self.env, "delivery_locations", None),
-        ]
-
-        pickups, deliveries = [], []
-        for cand in pickup_candidates:
+        # 2) Other candidate attributes
+        if not pickups:
+            cand = getattr(self.env, "pickups", None) or getattr(self.env, "pickup_locations", None)
             if cand:
-                pickups = normalize(cand)
-                if pickups: break
-        for cand in delivery_candidates:
+                for x in cand:
+                    p = self._normalize_pos(x)
+                    if p: pickups.append(p)
+
+        if not dropoffs:
+            cand = getattr(self.env, "deliveries", None) or getattr(self.env, "dropoffs", None) or getattr(self.env, "delivery_locations", None)
             if cand:
-                deliveries = normalize(cand)
-                if deliveries: break
+                for x in cand:
+                    d = self._normalize_pos(x)
+                    if d: dropoffs.append(d)
 
-        return pickups, deliveries
-
+        return pickups, dropoffs
 
     def act(self, obs: Dict[str, object]) -> Dict[str, int]:
-        """
-        obs: per-agent observation dict from env.reset()/env.step()
-        returns: per-agent discrete action
-        """
-        pickups, deliveries = self._extract_targets()
+        pickups, dropoffs = self._extract_targets()
         positions = getattr(self.env, "agent_positions", {})
         carrying = getattr(self.env, "agent_carrying", {})
 
         actions: Dict[str, int] = {}
 
         for a in self.agents:
-            pos = positions.get(a, None)
+            pos_raw = positions.get(a, None)
+            pos = None
+            if pos_raw is not None:
+                if isinstance(pos_raw, dict) and "pos" in pos_raw:
+                    pos = (int(pos_raw["pos"][0]), int(pos_raw["pos"][1]))
+                elif isinstance(pos_raw, (tuple, list)):
+                    pos = (int(pos_raw[0]), int(pos_raw[1]))
+
             if pos is None:
-                # If env doesn't expose positions, just stay (or random)
                 actions[a] = STAY
                 continue
 
-            zone = self.zones[a]
-
-            # If carrying, head toward nearest delivery (if known)
-            if carrying.get(a, None):
-                if deliveries:
-                    target = _closest(pos, deliveries)
-                    actions[a] = _move_towards(pos, target)
+            # If carrying, go to nearest dropoff
+            if carrying.get(a) is not None:
+                if dropoffs:
+                    tgt = _closest(pos, dropoffs)
+                    # if already at dropoff, stay to ensure delivery processed
+                    if tgt == pos:
+                        actions[a] = STAY
+                    else:
+                        actions[a] = _move_towards(pos, tgt)
                     continue
-                # else: fall back to sweep
 
-            # If not carrying, look for a pickup in-zone
+            # If not carrying, go to nearest pickup (prefer in-zone)
             if pickups:
-                # prioritize targets inside my zone
-                in_zone = [p for p in pickups if self._in_zone(p, zone)]
-                target = _closest(pos, in_zone) if in_zone else _closest(pos, pickups)
-                actions[a] = _move_towards(pos, target)
+                # try in-zone first
+                zone = self.zones[a]
+                in_zone = [p for p in pickups if zone[0] <= p[1] <= zone[1]]
+                tgt = _closest(pos, in_zone) if in_zone else _closest(pos, pickups)
+                if tgt == pos:
+                    actions[a] = STAY  # allow env to register pickup
+                else:
+                    actions[a] = _move_towards(pos, tgt)
                 continue
 
-            # Fallback: follow zone sweep path
+            # fallback sweep
             path = self.paths[a]
             idx = self.path_idx[a]
             goal = path[idx]
