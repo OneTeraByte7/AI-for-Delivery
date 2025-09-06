@@ -26,3 +26,20 @@ def main():
     print(f"  Std: {np.std(rewards):.3f}")
     print(f"  Min: {np.min(rewards):.3f}")
     print(f"  Max: {np.max(rewards):.3f}")
+    
+    unique, counts = np.unique(actions, return_counts=True)
+    print("\n🕹 Action Distribution:")
+    for u, c in zip(unique, counts):
+        print(f"  Action {u}: {c} times")
+    
+    # Plot rewards histogram
+    plt.figure(figsize=(6,4))
+    plt.hist(rewards, bins=20, alpha=0.7, color="blue")
+    plt.title("Reward Distribution")
+    plt.xlabel("Reward")
+    plt.ylabel("Frequency")
+    plt.tight_layout()
+    plt.show()
+
+if __name__ == "__main__":
+    main()
