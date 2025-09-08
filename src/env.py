@@ -1,8 +1,11 @@
+# src/env.py
 from pettingzoo.utils.env import ParallelEnv
 import numpy as np
 from gymnasium import spaces
 
-STAY, UP, DOWN, LEFT, RIGHT = 0, 1, 2, 3, 4
+# --- Action definitions ---
+UP, DOWN, LEFT, RIGHT, STAY, PICKUP, DROPOFF = range(7)
+
 
 class DeliveryFleetEnv(ParallelEnv):
     metadata = {'render.modes': ['human']}
@@ -22,16 +25,18 @@ class DeliveryFleetEnv(ParallelEnv):
         self.next_order_id = 0
 
         # actions for pickup/dropoff (used by CoordinatedGreedy)
-        self.pickup_action = STAY
-        self.dropoff_action = STAY
+        self.pickup_action = PICKUP
+        self.dropoff_action = DROPOFF
 
-        # spaces
-        self.action_spaces = {agent: spaces.Discrete(5) for agent in self.agents}
+        # action & obs spaces
+        self.action_spaces = {agent: spaces.Discrete(7) for agent in self.agents}
         self.observation_spaces = {
-            agent: spaces.Box(low=np.array([0, 0, -1, -1, -1, -1], dtype=np.float32),
-                              high=np.array([self.grid_size-1]*6, dtype=np.float32),
-                              shape=(6,),
-                              dtype=np.float32)
+            agent: spaces.Box(
+                low=np.array([0, 0, -1, -1, -1, -1], dtype=np.float32),
+                high=np.array([self.grid_size - 1] * 6, dtype=np.float32),
+                shape=(6,),
+                dtype=np.float32
+            )
             for agent in self.agents
         }
 
@@ -74,7 +79,10 @@ class DeliveryFleetEnv(ParallelEnv):
         for agent in self.agents:
             ax, ay = self.agent_positions[agent]
             if self.orders:
-                nearest_order = min(self.orders, key=lambda o: abs(o['pickup'][0]-ax)+abs(o['pickup'][1]-ay))
+                nearest_order = min(
+                    self.orders,
+                    key=lambda o: abs(o['pickup'][0] - ax) + abs(o['pickup'][1] - ay)
+                )
                 px, py = nearest_order['pickup']
                 dx, dy = nearest_order['dropoff']
             else:
@@ -97,7 +105,7 @@ class DeliveryFleetEnv(ParallelEnv):
             x, y = self.agent_positions[agent]
 
             # pickup
-            if action == self.pickup_action and self.agent_carrying[agent] is None:
+            if action == PICKUP and self.agent_carrying[agent] is None:
                 for order in self.orders:
                     if order['status'] == 'waiting' and (x, y) == order['pickup']:
                         order['status'] = 'picked'
@@ -106,7 +114,7 @@ class DeliveryFleetEnv(ParallelEnv):
                         break
 
             # dropoff
-            elif action == self.dropoff_action and self.agent_carrying[agent] is not None:
+            elif action == DROPOFF and self.agent_carrying[agent] is not None:
                 for order in self.orders:
                     if order['id'] == self.agent_carrying[agent] and (x, y) == order['dropoff']:
                         order['status'] = 'delivered'
@@ -117,13 +125,13 @@ class DeliveryFleetEnv(ParallelEnv):
             # movement
             elif action == UP and y > 0:
                 y -= 1
-            elif action == DOWN and y < self.grid_size-1:
+            elif action == DOWN and y < self.grid_size - 1:
                 y += 1
             elif action == LEFT and x > 0:
                 x -= 1
-            elif action == RIGHT and x < self.grid_size-1:
+            elif action == RIGHT and x < self.grid_size - 1:
                 x += 1
-            # else STAY
+            # elif action == STAY: do nothing
 
             new_positions[agent] = (x, y)
 
