@@ -1,168 +1,138 @@
-# src/env.py
-from pettingzoo.utils.env import ParallelEnv
-import numpy as np
+import gymnasium as gym
 from gymnasium import spaces
+import numpy as np
+import random
 
-# --- Action definitions ---
-UP, DOWN, LEFT, RIGHT, STAY, PICKUP, DROPOFF = range(7)
+# Actions
+STAY, UP, DOWN, LEFT, RIGHT, PICKUP, DROPOFF = range(7)
 
 
-class DeliveryFleetEnv(ParallelEnv):
-    metadata = {'render.modes': ['human']}
+class DeliveryFleetEnv(gym.Env):
+    metadata = {"render.modes": ["human"]}
 
-    def __init__(self, grid_size=8, num_agents=3, max_orders=6, order_spawn_rate=3):
+    def __init__(self, grid_size=8, num_agents=3, max_orders=6, order_spawn_rate=3, max_steps=200):
+        super().__init__()
         self.grid_size = grid_size
-        self._num_agents = num_agents
+        self.num_agents = num_agents
         self.max_orders = max_orders
         self.order_spawn_rate = order_spawn_rate
-        self.step_count = 0
+        self.max_steps = max_steps
 
-        self.agents = [f"agent_{i}" for i in range(self._num_agents)]
-        self.agent_positions = {}
-        self.agent_carrying = {agent: None for agent in self.agents}  # order_id if carrying
+        # Define agents
+        self.agents = [f"agent_{i}" for i in range(num_agents)]
 
-        self.orders = []  # active orders
-        self.next_order_id = 0
-
-        # actions for pickup/dropoff (used by CoordinatedGreedy)
-        self.pickup_action = PICKUP
-        self.dropoff_action = DROPOFF
-
-        # action & obs spaces
+        # Action & observation spaces
         self.action_spaces = {agent: spaces.Discrete(7) for agent in self.agents}
         self.observation_spaces = {
-            agent: spaces.Box(
-                low=np.array([0, 0, -1, -1, -1, -1], dtype=np.float32),
-                high=np.array([self.grid_size - 1] * 6, dtype=np.float32),
-                shape=(6,),
-                dtype=np.float32
-            )
+            agent: spaces.Box(low=0, high=1, shape=(grid_size, grid_size, 3), dtype=np.float32)
             for agent in self.agents
         }
 
-        self.reset()
+        # State tracking
+        self.agent_positions = {}
+        self.agent_carrying = {}
+        self.orders = []
+        self.t = 0
 
     def reset(self, seed=None, options=None):
-        self.step_count = 0
-        self.orders = []
-        self.next_order_id = 0
+        super().reset(seed=seed)
+        self.t = 0
+        self.agent_positions = {agent: self._random_empty_cell() for agent in self.agents}
         self.agent_carrying = {agent: None for agent in self.agents}
-
-        positions = set()
-        for agent in self.agents:
-            while True:
-                pos = (np.random.randint(self.grid_size), np.random.randint(self.grid_size))
-                if pos not in positions:
-                    self.agent_positions[agent] = pos
-                    positions.add(pos)
-                    break
-        return self._get_obs()
-
-    def _spawn_order(self):
-        if len(self.orders) >= self.max_orders:
-            return
-        pickup = (np.random.randint(self.grid_size), np.random.randint(self.grid_size))
-        dropoff = (np.random.randint(self.grid_size), np.random.randint(self.grid_size))
-        while dropoff == pickup:
-            dropoff = (np.random.randint(self.grid_size), np.random.randint(self.grid_size))
-        order = {
-            "id": self.next_order_id,
-            "pickup": pickup,
-            "dropoff": dropoff,
-            "status": "waiting"
-        }
-        self.orders.append(order)
-        self.next_order_id += 1
-
-    def _get_obs(self):
-        obs = {}
-        for agent in self.agents:
-            ax, ay = self.agent_positions[agent]
-            if self.orders:
-                nearest_order = min(
-                    self.orders,
-                    key=lambda o: abs(o['pickup'][0] - ax) + abs(o['pickup'][1] - ay)
-                )
-                px, py = nearest_order['pickup']
-                dx, dy = nearest_order['dropoff']
-            else:
-                px, py, dx, dy = -1, -1, -1, -1
-            obs[agent] = np.array([ax, ay, px, py, dx, dy], dtype=np.float32)
-        return obs
+        self.orders = []
+        obs = {agent: self._get_obs(agent) for agent in self.agents}
+        infos = {agent: {} for agent in self.agents}
+        return obs, infos
 
     def step(self, actions):
-        self.step_count += 1
-        rewards = {agent: -0.01 for agent in self.agents}  # step penalty
-        dones = {agent: False for agent in self.agents}
-        infos = {agent: {} for agent in self.agents}
+        self.t += 1
+        rewards = {agent: 0 for agent in self.agents}
+        terminations = {agent: False for agent in self.agents}
+        truncations = {agent: False for agent in self.agents}
+        infos = {agent: {"delivered": False} for agent in self.agents}
 
-        # spawn new order
-        if self.step_count % self.order_spawn_rate == 0:
-            self._spawn_order()
+        # Spawn new orders
+        if len(self.orders) < self.max_orders and self.t % self.order_spawn_rate == 0:
+            self.orders.append(self._generate_order())
 
-        new_positions = {}
+        # Apply actions
         for agent, action in actions.items():
             x, y = self.agent_positions[agent]
 
-            # pickup
-            if action == PICKUP and self.agent_carrying[agent] is None:
+            # Movement
+            if action == UP:
+                y = max(0, y - 1)
+            elif action == DOWN:
+                y = min(self.grid_size - 1, y + 1)
+            elif action == LEFT:
+                x = max(0, x - 1)
+            elif action == RIGHT:
+                x = min(self.grid_size - 1, x + 1)
+            elif action == PICKUP and self.agent_carrying[agent] is None:
                 for order in self.orders:
-                    if order['status'] == 'waiting' and (x, y) == order['pickup']:
-                        order['status'] = 'picked'
-                        self.agent_carrying[agent] = order['id']
+                    if order["status"] == "waiting" and (x, y) == order["pickup"]:
+                        order["status"] = "picked"
+                        self.agent_carrying[agent] = order["id"]
                         rewards[agent] += 5
                         break
-
-            # dropoff
             elif action == DROPOFF and self.agent_carrying[agent] is not None:
                 for order in self.orders:
-                    if order['id'] == self.agent_carrying[agent] and (x, y) == order['dropoff']:
-                        order['status'] = 'delivered'
+                    if order["id"] == self.agent_carrying[agent] and (x, y) == order["dropoff"]:
+                        order["status"] = "delivered"
                         self.agent_carrying[agent] = None
                         rewards[agent] += 20
+                        infos[agent]["delivered"] = True
                         break
 
-            # movement
-            elif action == UP and y > 0:
-                y -= 1
-            elif action == DOWN and y < self.grid_size - 1:
-                y += 1
-            elif action == LEFT and x > 0:
-                x -= 1
-            elif action == RIGHT and x < self.grid_size - 1:
-                x += 1
-            # elif action == STAY: do nothing
+            self.agent_positions[agent] = (x, y)
 
-            new_positions[agent] = (x, y)
+        # Check truncation
+        done = self.t >= self.max_steps
+        if done:
+            truncations = {agent: True for agent in self.agents}
 
-        # collision penalty
-        pos_counts = {}
-        for pos in new_positions.values():
-            pos_counts[pos] = pos_counts.get(pos, 0) + 1
-        for agent, pos in new_positions.items():
-            if pos_counts[pos] > 1:
-                new_positions[agent] = self.agent_positions[agent]  # revert
-                rewards[agent] -= 1
+        obs = {agent: self._get_obs(agent) for agent in self.agents}
+        return obs, rewards, terminations, truncations, infos
 
-        self.agent_positions = new_positions
+    def _random_empty_cell(self):
+        return (random.randint(0, self.grid_size - 1), random.randint(0, self.grid_size - 1))
 
-        # remove delivered orders
-        self.orders = [o for o in self.orders if o['status'] != 'delivered']
+    def _generate_order(self):
+        return {
+            "id": len(self.orders),
+            "pickup": self._random_empty_cell(),
+            "dropoff": self._random_empty_cell(),
+            "status": "waiting",
+        }
 
-        observations = self._get_obs()
-        dones['__all__'] = False
-        return observations, rewards, dones, infos
+    def _get_obs(self, agent):
+        grid = np.zeros((self.grid_size, self.grid_size, 3), dtype=np.float32)
 
-    def render(self, mode='human'):
-        grid = np.full((self.grid_size, self.grid_size), '.', dtype=str)
+        # Agents
+        for pos in self.agent_positions.values():
+            grid[pos[1], pos[0], 0] = 1.0
+
+        # Orders
         for order in self.orders:
-            px, py = order['pickup']
-            dx, dy = order['dropoff']
-            if order['status'] == 'waiting':
-                grid[py, px] = 'P'
-            elif order['status'] == 'picked':
-                grid[dy, dx] = 'D'
+            if order["status"] == "waiting":
+                px, py = order["pickup"]
+                grid[py, px, 1] = 1.0
+            elif order["status"] == "picked":
+                dx, dy = order["dropoff"]
+                grid[dy, dx, 2] = 1.0
+
+        return grid
+
+    def render(self, mode="human"):
+        grid = np.full((self.grid_size, self.grid_size), ".", dtype=str)
         for agent, (x, y) in self.agent_positions.items():
-            grid[y, x] = agent[-1]
+            grid[y, x] = "A"
+        for order in self.orders:
+            if order["status"] == "waiting":
+                px, py = order["pickup"]
+                grid[py, px] = "P"
+            elif order["status"] == "picked":
+                dx, dy = order["dropoff"]
+                grid[dy, dx] = "D"
         print("\n".join(" ".join(row) for row in grid))
-        print()
+        print("-" * 20)
