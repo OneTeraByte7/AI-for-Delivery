@@ -24,7 +24,7 @@ def make_env(max_episode_steps=400):
 
 def main():
     venv = DummyVecEnv([make_env(400)])
-    model = PPO.load("models/ppo_agent_0_final.zip")
+    model = PPO.load("./models/ppo_agent_0.zip")
 
     obs = venv.reset()
     ep_rewards = 0.0

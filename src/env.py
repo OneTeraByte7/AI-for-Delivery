@@ -1,42 +1,43 @@
-import gymnasium as gym
-from gymnasium import spaces
 import numpy as np
 import random
+from gymnasium import spaces
+from pettingzoo.utils import ParallelEnv
+
 
 # Actions
 STAY, UP, DOWN, LEFT, RIGHT, PICKUP, DROPOFF = range(7)
 
 
-class DeliveryFleetEnv(gym.Env):
-    metadata = {"render.modes": ["human"]}
+class DeliveryFleetEnv(ParallelEnv):
+    metadata = {"render_modes": ["human"]}
 
     def __init__(self, grid_size=8, num_agents=3, max_orders=6, order_spawn_rate=3, max_steps=200):
         super().__init__()
         self.grid_size = grid_size
-        self.num_agents = num_agents
+        self._num_agents = num_agents
         self.max_orders = max_orders
         self.order_spawn_rate = order_spawn_rate
         self.max_steps = max_steps
 
-        # Define agents
         self.agents = [f"agent_{i}" for i in range(num_agents)]
+        self.possible_agents = self.agents[:]
 
-        # Action & observation spaces
+        # Action and observation spaces
         self.action_spaces = {agent: spaces.Discrete(7) for agent in self.agents}
         self.observation_spaces = {
-            agent: spaces.Box(low=0, high=1, shape=(grid_size, grid_size, 3), dtype=np.float32)
+            agent: spaces.Box(low=0, high=1, shape=(3, grid_size, grid_size), dtype=np.float32)
             for agent in self.agents
         }
 
-        # State tracking
+        # State
+        self.t = 0
         self.agent_positions = {}
         self.agent_carrying = {}
         self.orders = []
-        self.t = 0
 
     def reset(self, seed=None, options=None):
-        super().reset(seed=seed)
         self.t = 0
+        self.agents = self.possible_agents[:]
         self.agent_positions = {agent: self._random_empty_cell() for agent in self.agents}
         self.agent_carrying = {agent: None for agent in self.agents}
         self.orders = []
@@ -59,7 +60,6 @@ class DeliveryFleetEnv(gym.Env):
         for agent, action in actions.items():
             x, y = self.agent_positions[agent]
 
-            # Movement
             if action == UP:
                 y = max(0, y - 1)
             elif action == DOWN:
@@ -86,7 +86,7 @@ class DeliveryFleetEnv(gym.Env):
 
             self.agent_positions[agent] = (x, y)
 
-        # Check truncation
+        # End condition
         done = self.t >= self.max_steps
         if done:
             truncations = {agent: True for agent in self.agents}
@@ -106,24 +106,24 @@ class DeliveryFleetEnv(gym.Env):
         }
 
     def _get_obs(self, agent):
-        grid = np.zeros((self.grid_size, self.grid_size, 3), dtype=np.float32)
+        grid = np.zeros((3, self.grid_size, self.grid_size), dtype=np.float32)
 
         # Agents
         for pos in self.agent_positions.values():
-            grid[pos[1], pos[0], 0] = 1.0
+            grid[0, pos[1], pos[0]] = 1.0
 
         # Orders
         for order in self.orders:
             if order["status"] == "waiting":
                 px, py = order["pickup"]
-                grid[py, px, 1] = 1.0
+                grid[1, py, px] = 1.0
             elif order["status"] == "picked":
                 dx, dy = order["dropoff"]
-                grid[dy, dx, 2] = 1.0
+                grid[2, dy, dx] = 1.0
 
         return grid
 
-    def render(self, mode="human"):
+    def render(self):
         grid = np.full((self.grid_size, self.grid_size), ".", dtype=str)
         for agent, (x, y) in self.agent_positions.items():
             grid[y, x] = "A"

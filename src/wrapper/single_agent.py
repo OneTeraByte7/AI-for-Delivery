@@ -19,12 +19,13 @@ class SingleAgentWrapper(gym.Env):
         self._t = 0
         self.max_episode_steps = max_episode_steps
 
-        # ----- Observation space -----
-        obs, _ = self.base_env.reset()  # unpack properly
-        sample_obs = np.array(obs[self.control_agent], dtype=np.float32)
+        # ----- Observation space (flatten to 1D vector) -----
+        obs, _ = self.base_env.reset()
+        sample_obs = np.array(obs[self.control_agent], dtype=np.float32).flatten()
         self.observation_space = gym.spaces.Box(
-            low=-np.inf * np.ones_like(sample_obs, dtype=np.float32),
-            high=np.inf * np.ones_like(sample_obs, dtype=np.float32),
+            low=0.0,
+            high=1.0,
+            shape=sample_obs.shape,
             dtype=np.float32,
         )
 
@@ -43,7 +44,8 @@ class SingleAgentWrapper(gym.Env):
     def reset(self, *, seed=None, options=None, **kwargs):
         self._t = 0
         obs, info = self.base_env.reset(seed=seed, options=options, **kwargs)
-        return np.array(obs[self.control_agent], dtype=np.float32), info.get(self.control_agent, {})
+        obs = np.array(obs[self.control_agent], dtype=np.float32).flatten()
+        return obs, info.get(self.control_agent, {})
 
     def step(self, action):
         self._t += 1
@@ -67,15 +69,11 @@ class SingleAgentWrapper(gym.Env):
         terminated = terminateds.get(self.control_agent, False)
         truncated = truncateds.get(self.control_agent, False) or (self._t >= self.max_episode_steps)
 
+        obs = np.array(obs[self.control_agent], dtype=np.float32).flatten()
+        reward = float(rewards[self.control_agent])
         info = infos.get(self.control_agent, {})
 
-        return (
-            np.array(obs[self.control_agent], dtype=np.float32),
-            float(rewards[self.control_agent]),
-            terminated,
-            truncated,
-            info,
-        )
+        return obs, reward, terminated, truncated, info
 
     def render(self):
         return self.base_env.render()
