@@ -1,6 +1,7 @@
 import gymnasium as gym
 import numpy as np
 
+
 class SingleAgentWrapper(gym.Env):
     """
     Wraps a multi-agent env (DeliveryFleetEnv) into a single-agent Gym environment.
@@ -19,8 +20,9 @@ class SingleAgentWrapper(gym.Env):
         self.max_episode_steps = max_episode_steps
 
         # ----- Observation space -----
-        sample_obs = np.array(self.base_env.reset()[self.control_agent], dtype=np.float32)
-        self.observations_space = gym.spaces.Box(
+        obs, _ = self.base_env.reset()  # unpack properly
+        sample_obs = np.array(obs[self.control_agent], dtype=np.float32)
+        self.observation_space = gym.spaces.Box(
             low=-np.inf * np.ones_like(sample_obs, dtype=np.float32),
             high=np.inf * np.ones_like(sample_obs, dtype=np.float32),
             dtype=np.float32,
@@ -40,13 +42,13 @@ class SingleAgentWrapper(gym.Env):
 
     def reset(self, *, seed=None, options=None, **kwargs):
         self._t = 0
-        obs = self.base_env.reset()
-        return np.array(obs[self.control_agent], dtype=np.float32), {}
+        obs, info = self.base_env.reset(seed=seed, options=options, **kwargs)
+        return np.array(obs[self.control_agent], dtype=np.float32), info.get(self.control_agent, {})
 
     def step(self, action):
         self._t += 1
 
-        # Build full action dict
+        # Build full action dict (random for other agents)
         actions = {}
         for agent in self.base_env.agents:
             if agent == self.control_agent:
@@ -60,10 +62,10 @@ class SingleAgentWrapper(gym.Env):
                 else:
                     actions[agent] = np.random.randint(0, 5)
 
-        obs, rewards, dones, infos = self.base_env.step(actions)
+        obs, rewards, terminateds, truncateds, infos = self.base_env.step(actions)
 
-        terminated = dones.get(self.control_agent, False)
-        truncated = self._t >= self.max_episode_steps
+        terminated = terminateds.get(self.control_agent, False)
+        truncated = truncateds.get(self.control_agent, False) or (self._t >= self.max_episode_steps)
 
         info = infos.get(self.control_agent, {})
 
@@ -76,7 +78,7 @@ class SingleAgentWrapper(gym.Env):
         )
 
     def render(self):
-        self.base_env.render()
+        return self.base_env.render()
 
     def close(self):
         self.base_env.close()
