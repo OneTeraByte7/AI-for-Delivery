@@ -4,7 +4,6 @@ import random
 from gymnasium import spaces
 from pettingzoo.utils import ParallelEnv
 
-
 # Actions
 STAY, UP, DOWN, LEFT, RIGHT, PICKUP, DROPOFF = range(7)
 
@@ -124,37 +123,25 @@ class DeliveryFleetEnv(ParallelEnv):
 
         return grid
 
-    def render(self):
-        grid = np.full((self.grid_size, self.grid_size), ".", dtype=str)
-        for agent, (x, y) in self.agent_positions.items():
-            grid[y, x] = "A"
-        for order in self.orders:
-            if order["status"] == "waiting":
-                px, py = order["pickup"]
-                grid[py, px] = "P"
-            elif order["status"] == "picked":
-                dx, dy = order["dropoff"]
-                grid[dy, dx] = "D"
-        print("\n".join(" ".join(row) for row in grid))
-        print("-" * 20)
-        
     def render(self, mode="human"):
         grid = np.zeros((self.grid_size, self.grid_size, 3), dtype=np.uint8) + 255  # white background
 
-        # Draw deliveries (blue squares)
-        for d in self.deliveries:
-            x, y = d
-            grid[y, x] = [0, 0, 255]
+        # Orders
+        for order in self.orders:
+            if order["status"] == "waiting":
+                x, y = order["pickup"]
+                grid[y, x] = [255, 0, 0]  # red pickup
+            elif order["status"] == "picked":
+                x, y = order["dropoff"]
+                grid[y, x] = [0, 0, 255]  # blue dropoff
+            elif order["status"] == "delivered":
+                x, y = order["dropoff"]
+                grid[y, x] = [180, 180, 180]  # gray delivered
 
-        # Draw orders (red squares)
-        for o in self.orders:
-            x, y = o
-            grid[y, x] = [255, 0, 0]
-
-        # Draw agents (green circles)
-        for agent_id, pos in self.agent_positions.items():
+        # Agents
+        for _, pos in self.agent_positions.items():
             x, y = pos
-            grid[y, x] = [0, 200, 0]
+            grid[y, x] = [0, 200, 0]  # green agent
 
         plt.imshow(grid, interpolation="nearest")
         plt.axis("off")
