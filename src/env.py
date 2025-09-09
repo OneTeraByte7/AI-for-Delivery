@@ -1,4 +1,5 @@
 import numpy as np
+import matplotlib.pyplot as plt
 import random
 from gymnasium import spaces
 from pettingzoo.utils import ParallelEnv
@@ -136,3 +137,26 @@ class DeliveryFleetEnv(ParallelEnv):
                 grid[dy, dx] = "D"
         print("\n".join(" ".join(row) for row in grid))
         print("-" * 20)
+        
+    def render(self, mode="human"):
+        grid = np.zeros((self.grid_size, self.grid_size, 3), dtype=np.uint8) + 255  # white background
+
+        # Draw deliveries (blue squares)
+        for d in self.deliveries:
+            x, y = d
+            grid[y, x] = [0, 0, 255]
+
+        # Draw orders (red squares)
+        for o in self.orders:
+            x, y = o
+            grid[y, x] = [255, 0, 0]
+
+        # Draw agents (green circles)
+        for agent_id, pos in self.agent_positions.items():
+            x, y = pos
+            grid[y, x] = [0, 200, 0]
+
+        plt.imshow(grid, interpolation="nearest")
+        plt.axis("off")
+        plt.pause(0.1)
+        plt.clf()
