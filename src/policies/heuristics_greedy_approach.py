@@ -1,3 +1,5 @@
+# Greedy Heuristic Policy for Single-Agent Pickup and Delivery
+
 import random
 
 def self_policy(env, agent):
