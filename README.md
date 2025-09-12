@@ -164,7 +164,8 @@ Planned:
 
 ## 👀Visuals:
 
-See in folder
+https://github.com/user-attachments/assets/6eda7973-5e89-4638-ba00-9102ef23884f
+
 
 ---
 
