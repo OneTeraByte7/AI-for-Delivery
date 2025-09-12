@@ -151,6 +151,11 @@ Planned:
 
 ## 👀Visuals:
 
-Uploading Recording 2025-09-12 203855.mp4…
+See in folder
 
+---
+
+## Copyright
+
+All copyrights are reserved to Soham 
 
