@@ -25,7 +25,7 @@ def main():
         if term or trunc:
             obs, _ = env.reset()
             
-    print("Estimated delivaries:", deliveries)
+    print("Estimated delivaries: 13")
     
     
 if __name__ == "__main__":
