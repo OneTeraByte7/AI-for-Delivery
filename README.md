@@ -1,16 +1,15 @@
 # 🚚 Multi-Agent Delivery Fleet Simulator
 
-[![Python](https://img.shields.io/badge/python-3.9%2B-blue?logo=python&logoColor=white)](https://www.python.org/)  
-[![Gymnasium](https://img.shields.io/badge/Gymnasium-RL-orange?logo=openai&logoColor=white)](https://gymnasium.farama.org/)  
-[![PettingZoo](https://img.shields.io/badge/PettingZoo-MARL-green)](https://www.pettingzoo.ml/)  
-[![Stable-Baselines3](https://img.shields.io/badge/Stable--Baselines3-PPO-red)](https://stable-baselines3.readthedocs.io/)  
-[![Matplotlib](https://img.shields.io/badge/Matplotlib-Visualization-yellow?logo=plotly&logoColor=white)](https://matplotlib.org/)  
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)  
-
-📅 **Year**: 2025  
-🏆 **Status**: Completed ✅  
-🥇 **Project Type**: Multi-Agent Reinforcement Learning Environment  
-
+[![Python](https://img.shields.io/badge/python-3.9%2B-blue?logo=python&logoColor=white)](https://www.python.org/) 
+[![Gymnasium](https://img.shields.io/badge/Gymnasium-RL-orange?logo=openai&logoColor=white)](https://gymnasium.farama.org/) 
+[![PettingZoo](https://img.shields.io/badge/PettingZoo-MARL-green)](https://www.pettingzoo.ml/) 
+[![Stable-Baselines3](https://img.shields.io/badge/Stable--Baselines3-PPO-red)](https://stable-baselines3.readthedocs.io/) 
+[![Matplotlib](https://img.shields.io/badge/Matplotlib-Visualization-yellow?logo=plotly&logoColor=white)](https://matplotlib.org/) 
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE) 
+[![Year](https://img.shields.io/badge/Year-2025-purple)](#) 
+[![Status](https://img.shields.io/badge/Status-Completed-success)](#) 
+[![Trophy](https://img.shields.io/badge/Trophy-🏆-gold)](#)
+ 
 ---
 
 
