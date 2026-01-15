@@ -1,4 +1,5 @@
 # 🚚 Multi-Agent Delivery Fleet Simulator
+<img width="946" height="373" alt="Gemini_Generated_Image_hxeayzhxeayzhxea" src="https://github.com/user-attachments/assets/2531e431-4b8e-499e-92fb-a59163482a80" />
 
 [![Python](https://img.shields.io/badge/python-3.9%2B-blue?logo=python&logoColor=white)](https://www.python.org/) 
 [![Gymnasium](https://img.shields.io/badge/Gymnasium-RL-orange?logo=openai&logoColor=white)](https://gymnasium.farama.org/) 
